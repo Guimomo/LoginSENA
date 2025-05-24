@@ -2,6 +2,7 @@ import bodyParser from 'body-parser';
 import express, { response } from 'express';
 import bcrypt from 'bcryptjs';
 import mysql from 'mysql2/promise';
+import Jwt from 'jsonwebtoken';
 
 const app = express();
 
@@ -22,11 +23,12 @@ app.post ('/login', async (req,res)=>{
 
     const [rows] = await conexion.query ("Select * from usuarios where email = ?", [email]);
 
-    console.log(rows);
+    console.log(rows[0].password);
 
-    const esValido = wait bcrypt.compare(password, usuario.pass_word);
+    const esValido = await bcrypt.compare(password, rows[0].password);
     if (esValido){
 
+        const token = generarToken();
         console.log('Autenticado');
         
     } else {
@@ -61,5 +63,13 @@ const conexion = await mysql.createConnection({
     database: "node_2824003",
 
 });
+
+const generarToken =()=>{
+
+    return Jwt.sign({
+        data: 'foobar'
+    }, 'secret', {expiresIn: '1h'})
+
+}
 
 app.listen(3000)
