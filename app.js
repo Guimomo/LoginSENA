@@ -8,37 +8,93 @@ const app = express();
 
 app.use(bodyParser.json());
 
-
 app.use(express.urlencoded({extended:true}));
+
+const validarToken = (req, res, nex) => {
+
+    try {
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")){
+        return res.json({
+            "mensaje": "solicitud sin token"
+        });
+    }
+
+    const token = authHeader.split("  ")[1];
+    const decode = Jwt.verify(token, 'secret');
+    nex();
+        
+    } catch (error) {
+        
+        return res.json({
+            "mensaje": "Token inválido o expirado"
+        });
+    }
+
+    //console.log(req.headers.authorization)
+
+}
+
+const validarRefreshToken = (req, res, nex) => {
+
+    try {
+
+    const authHeader = req.headers.authorization;
+    const correo = req.body.email;
+    if (!authHeader || !authHeader.startsWith("Bearer  ")){
+        return res.json({
+            "mensaje": "solicitud sin token"
+        });
+    }
+    const token = authHeader.split("  ")[1];
+    const decode = Jwt.verify(token, 'secretRefresh');
+
+    console.log(decode.data, correo);
+    
+    if( decode.data === correo ){
+
+    }
+
+    nex();
+        
+    } catch (error) {
+        
+        return res.json({
+            "mensaje": "Refresh token invalido"
+        });
+    }
+}
 
 app.post ('/login', async (req,res)=>{
     //console.log("hola mundo");
-
-    const email = req.body.email;
-    const password = req.body.pass_word;
-    //const contrasena = await bcrypt.hash(password, 10);
     
+    const correo = req.body.email;
+    const contrasena = req.body.pass_word;
 
-    console.log(email,password);
+    const [rows] = await conexion.query ("Select * from usuarios where email = ?", [correo]);
 
-    const [rows] = await conexion.query ("Select * from usuarios where email = ?", [email]);
-
-    console.log(rows[0].password);
-
-    const esValido = await bcrypt.compare(password, rows[0].password);
-    if (esValido){
-
-        const token = generarToken();
-        console.log('Autenticado');
+    const esValido = await bcrypt.compare(contrasena, rows[0].pass_word);
+    if (esValido) {
+        console.log(rows[0]);
         
+       const token = generarToken(rows[0]);
+       const refresToken = refreshToken(rows[0]);
+       const dbRefreshtoken = await conexion.query("UPDATE usuarios SET refresh_token = ? WHERE email = ?" , [refresToken,correo ])
+       return res.json({
+        mensaje : "Usuario Autenticado",
+        token: token,
+        refresToken : refresToken
+       });
     } else {
+        const token = generarToken();
+        const refresToken = refreshToken();
+        return res.json({
+        mensaje : "Usuario No Autenticado",
 
-        console.log('no autenticado');
-        
-    }
-    
-
-    return res.json ({"hola" : "mundo"});
+       });
+    }         
+    //return res.json ({"hola" : "mundo"});
     
 });
 
@@ -55,21 +111,44 @@ app.post('/registro', async (req,res)=>{
 
 });
 
+app.get('/privada', validarToken, (req, res) =>{
+    return res.json({
+        "mensaje": "Ingresamos a ruta privada"
+    });
+});
+
+app.post('/refrescar', validarRefreshToken, (req, res) =>{
+
+    return res.json({
+        "mensaje": "Ingresamos a ruta refrescar"
+    });
+});
+
 const conexion = await mysql.createConnection({
 
     host: "localhost",
     user: "Guille_2824003",
     password:"Aprendiz2025",
     database: "node_2824003",
-
 });
 
-const generarToken =()=>{
 
+const generarToken =(usuario)=>{
+    
     return Jwt.sign({
-        data: 'foobar'
+        usuario 
     }, 'secret', {expiresIn: '1h'})
 
 }
+
+const refreshToken = (usuario) => {
+
+    return Jwt.sign({
+    //data: usuario.email 
+    usuario
+    }, 'secretRefresh', { expiresIn: '7d' });
+}
+
+//basado en el refresh que dura 7d tengo que volver actualizar el token
 
 app.listen(3000)
